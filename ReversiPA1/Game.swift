@@ -296,6 +296,7 @@ extension Game: GKGameModel {
         if let game = gameModel as? Game {
             currentPlayer = game.currentPlayer
             board = game.board
+            
         }
     }
     

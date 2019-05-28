@@ -21,6 +21,26 @@ class ViewController: UIViewController {
     @IBOutlet weak var blackScoreLabel: UILabel!
     @IBOutlet weak var whiteScoreLabel: UILabel!
     
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        strategist = Strategist(game: game)
+        
+        game.currentPlayer = allPlayers[0]
+        game.setInitialBoard(gameBoard: gameBoard)
+        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+        drawBoard()
+        printBoard()
+        
+        print("BLACK @: ", game.locateDisks(color: .black, gameboard: gameBoard))
+        print("WHITE @: ", game.locateDisks(color: .white, gameboard: gameBoard))
+        print("VALID @: ", game.locateDisks(color: .valid, gameboard: gameBoard))
+        whiteScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "white"))
+        blackScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "black"))
+    }
+    
+    
     func alertGameOver() {
         let gameOverAlert = UIAlertController(title: "Game over", message: "", preferredStyle: UIAlertControllerStyle.alert)
         let blackDisks: Int = gameBoard.countDisk(gameBoard: gameBoard, color: "black")
@@ -138,6 +158,42 @@ class ViewController: UIViewController {
         }
     }
     
+    
+    func updateGame() {
+        game.currentPlayer = game.currentPlayer.oppositePlayer
+        if game.currentPlayer.disk == .black {
+            processAIMove()
+        }
+    }
+    
+    
+    func processAIMove(){
+        DispatchQueue.global().async { [unowned self] in
+            let strategistTime = CFAbsoluteTimeGetCurrent()
+            
+            guard let column = self.strategist.bestMoveForAI() else {
+                return
+            }
+            
+            let delta = CFAbsoluteTimeGetCurrent() - strategistTime
+            
+            let aiWaitTime = 1.0
+            let delay = min(aiWaitTime - delta, aiWaitTime)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                self.makeAIMove(in: column.0, col: column.1)
+            }
+        }
+    }
+    
+    func makeAIMove(in row: Int, col: Int) {
+        if self.gameBoard[row,col] == .empty {
+            game.addDiskToBoard(game.currentPlayer.disk, x: row, y: col)
+            game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: row, y: col)
+            updateGame()
+        }
+    }
+    
     @IBAction func action(_ sender: UIButton)
     {
         // Converting button tag into X, Y coordinates on the game board.
@@ -145,65 +201,123 @@ class ViewController: UIViewController {
         posX = (posX-100)/10
         var posY: Int! = sender.tag
         posY = (posY-100)%10
+
+        game.scanActivePlayer(activePlayer: game.currentPlayer, gameboard: gameBoard)
         
-        informationLabel.text = nil
-        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
         
-        if game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard) {
-            
+        
+        if game.hasValidMove(activePlayer: game.currentPlayer, gameboard: gameBoard) {
             if (game.activePlayer!.playerId == allPlayers[0].playerId) {
+                updateGame()
+                drawBoard()
                 if gameBoard[posX,posY] == .valid {
                     resetCurrent(gameboard: gameBoard)
                     gameBoard[posX,posY] = .blackLast
                     resetValid(gameboard: gameBoard)
+                    game.addDiskToBoard(game.currentPlayer.disk, x: posX, y: posY)
                     game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
-                    game.switchPlayer()
-                } else {
-                    alertInvalidMove()
-                }
+                    //game.switchPlayer()
+                    game.currentPlayer = game.currentPlayer.oppositePlayer
+                } else { alertInvalidMove() }
+                
             } else if (game.activePlayer!.playerId == allPlayers[1].playerId) {
-                if gameBoard[posX,posY] == .valid {
-                    resetCurrent(gameboard: gameBoard)
-                    gameBoard[posX,posY] = .whiteLast
-                    resetValid(gameboard: gameBoard)
-                    game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
-                    game.switchPlayer()
-                } else {
-                    alertInvalidMove()
+                    if gameBoard[posX,posY] == .valid {
+                        resetCurrent(gameboard: gameBoard)
+                        gameBoard[posX,posY] = .whiteLast
+                        resetValid(gameboard: gameBoard)
+                        game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
+                        game.switchPlayer()
+                    } else { alertInvalidMove() }
+                }
+            } else {
+                informationLabel.text = "have to pass"
+                game.switchPlayer()
+                resetValid(gameboard: gameBoard)
+                game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
+                drawBoard()
+            }
+        
+    
+            drawBoard()
+            resetValid(gameboard: gameBoard)
+            game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+//            printBoard()
+            drawBoard()
+//            //undoButton.isHidden = false
+    
+            if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
+                //alertNoMove()
+                informationLabel.text = "have to pass"
+                game.switchPlayer()
+                game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+                printBoard()
+                drawBoard()
+                if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
+                    alertGameOver()
                 }
             }
-        } else {
-            informationLabel.text = "have to pass"
-            game.switchPlayer()
-            resetValid(gameboard: gameBoard)
-            game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
-            drawBoard()
-        }
+
         
-        drawBoard()
-        resetValid(gameboard: gameBoard)
-        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
-        printBoard()
-        drawBoard()
-        //undoButton.isHidden = false
-        
-        if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
-            //alertNoMove()
-            informationLabel.text = "have to pass"
-            game.switchPlayer()
-            game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
-            printBoard()
-            drawBoard()
-            if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
-                alertGameOver()
-            }
-        }
-        print("BLACK @: ", game.locateDisks(color: .black, gameboard: gameBoard))
-        print("WHITE @: ", game.locateDisks(color: .white, gameboard: gameBoard))
-        print("VALID @: ", game.locateDisks(color: .valid, gameboard: gameBoard))
-        whiteScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "white"))
-        blackScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "black"))
-    }
+//        informationLabel.text = nil
+//        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+//
+//        if game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard) {
+//
+//            if (game.activePlayer!.playerId == allPlayers[0].playerId) {
+//                if gameBoard[posX,posY] == .valid {
+//                    resetCurrent(gameboard: gameBoard)
+//                    gameBoard[posX,posY] = .blackLast
+//                    resetValid(gameboard: gameBoard)
+//                    game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
+//                    game.switchPlayer()
+//                } else {
+//                    alertInvalidMove()
+//                }
+//            } else if (game.activePlayer!.playerId == allPlayers[1].playerId) {
+//                if gameBoard[posX,posY] == .valid {
+//                    resetCurrent(gameboard: gameBoard)
+//                    gameBoard[posX,posY] = .whiteLast
+//                    resetValid(gameboard: gameBoard)
+//                    game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
+//                    game.switchPlayer()
+//                } else {
+//                    alertInvalidMove()
+//                }
+//            }
+//        } else {
+//            informationLabel.text = "have to pass"
+//            game.switchPlayer()
+//            resetValid(gameboard: gameBoard)
+//            game.flipDisk(activePlayer: game.activePlayer, gameBoard: gameBoard, x: posX, y: posY)
+//            drawBoard()
+//        }
+//
+//        drawBoard()
+//        resetValid(gameboard: gameBoard)
+//        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+//        printBoard()
+//        drawBoard()
+//        //undoButton.isHidden = false
+//
+//        if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
+//            //alertNoMove()
+//            informationLabel.text = "have to pass"
+//            game.switchPlayer()
+//            game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
+//            printBoard()
+//            drawBoard()
+//            if !(game.hasValidMove(activePlayer: game.activePlayer!, gameboard: gameBoard)) {
+//                alertGameOver()
+//            }
+//        }
+//        print("BLACK @: ", game.locateDisks(color: .black, gameboard: gameBoard))
+//        print("WHITE @: ", game.locateDisks(color: .white, gameboard: gameBoard))
+//        print("VALID @: ", game.locateDisks(color: .valid, gameboard: gameBoard))
+//        whiteScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "white"))
+//        blackScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "black"))
+}
+    
+    
     
     @IBAction func newGame(_ sender: Any) {
         resetBoard(gameboard: gameBoard)
@@ -221,24 +335,7 @@ class ViewController: UIViewController {
         blackScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "black"))
     }
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        strategist = Strategist(game: game)
-        
 
-        game.currentPlayer = allPlayers[0]
-        game.setInitialBoard(gameBoard: gameBoard)
-        game.scanActivePlayer(activePlayer: game.activePlayer!, gameboard: gameBoard)
-        drawBoard()
-        printBoard()
-        
-        print("BLACK @: ", game.locateDisks(color: .black, gameboard: gameBoard))
-        print("WHITE @: ", game.locateDisks(color: .white, gameboard: gameBoard))
-        print("VALID @: ", game.locateDisks(color: .valid, gameboard: gameBoard))
-        whiteScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "white"))
-        blackScoreLabel.text = String(gameBoard.countDisk(gameBoard: gameBoard, color: "black"))
-    }
 
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
